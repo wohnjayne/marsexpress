@@ -10,7 +10,7 @@ import os.path
 import gc
 import sys
 
-interval = 60 #minutes
+interval = 20 #minutes
 
 path = {}
 path = "/home/malte/data/mars-express-power-3years/"
@@ -84,6 +84,11 @@ is_training_data = ~targets[target_cols[0]].isnull()
 data_train,targets_train = data[is_training_data], targets[is_training_data]
 data_test,targets_test = data[~is_training_data], targets[~is_training_data]
 
+print data_train.isnull().values.any()
+print data_test.isnull().values.any()
+print targets_train.isnull().values.any()
+print targets_test.isnull().values.any()
+#exit(1)
 # split validation data
 cv_split = data_train.index < '2012-05-27'
 data_train_cv, targets_train_cv = data_train[cv_split], targets_train[cv_split]
@@ -91,13 +96,20 @@ data_validation_cv, targets_validation_cv = data_train[~cv_split], targets_train
 
 from sklearn.ensemble import RandomForestRegressor
 
-def fitAndPredictRandomForest(data,targets,data_for_prediction,n_estimators=200, min_samples_leaf=300):
+def fitAndPredictRandomForest(data,targets,data_for_prediction,n_estimators=100, min_samples_leaf=500):
     rf = RandomForestRegressor(n_estimators=n_estimators, min_samples_leaf=min_samples_leaf, n_jobs=-1)
     rf.fit(data, targets)
     return rf.predict(data_for_prediction),rf
 if do_validation:
     print "fitting model for validation set"
     [predictions_validation_cv, model]= fitAndPredictRandomForest(data_train_cv,targets_train_cv,data_validation_cv)
+    if interval<60:
+        predictions_validation_cv = pd.DataFrame(predictions_validation_cv,columns=targets_train_cv.columns,index=data_validation_cv.index)
+        predictions_validation_cv = predictions_validation_cv.resample('60T').mean().fillna(method='pad')
+        print predictions_validation_cv.isnull().values.any()
+        predictions_validation_cv = predictions_validation_cv.as_matrix()
+        targets_validation_cv = targets_validation_cv.resample('60T').mean().fillna(method='pad')
+        print targets_validation_cv.isnull().values.any()
     error = marsexpress_error(predictions_validation_cv,targets_validation_cv)
     print "Validation error: {} ".format(error)
 
@@ -111,6 +123,8 @@ if do_test:
 
     #Converting the prediction matrix to a dataframe
     predictions_test=pd.DataFrame(predictions_test, index=data_test.index, columns=target_cols)
+    if interval<60:
+        predictions_test = predictions_test.resample('60T').mean()
     # We need to convert the parsed datetime back to utc timestamp
     predictions_test['ut_ms'] = (predictions_test.index.astype(np.int64) * 1e-6).astype(int)
     # Writing the submission file as csv

@@ -146,7 +146,7 @@ data_validation_cv, targets_validation_cv = data_train[~cv_split], targets_train
 
 from sklearn.ensemble import RandomForestRegressor
 
-def fitAndPredictRandomForest(data,targets,data_for_prediction,n_estimators=10, min_samples_leaf=5):
+def fitAndPredictRandomForest(data,targets,data_for_prediction,n_estimators=100, min_samples_leaf=5):
     rf = RandomForestRegressor(n_estimators=n_estimators, min_samples_leaf=min_samples_leaf, n_jobs=-1)
     rf.fit(data, targets)
     return rf.predict(data_for_prediction),rf

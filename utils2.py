@@ -11,6 +11,25 @@ import gzip
 import os.path
 import gc
 
+import code
+import sys
+# from http://vjethava.blogspot.de/2010/11/matlabs-keyboard-command-in-python.html
+def keyboard(banner=None):
+    ''' Function that mimics the matlab keyboard command '''
+    # use exception trick to pick up the current frame
+    try:
+        raise None
+    except:
+        frame = sys.exc_info()[2].tb_frame.f_back
+    print "# Use quit() to exit :) Happy debugging!"
+    # evaluate commands in current namespace
+    namespace = frame.f_globals.copy()
+    namespace.update(frame.f_locals)
+    try:
+        code.interact(banner=banner, local=namespace)
+    except SystemExit:
+        return 
+        
 def progress_printer(current_number, total_number):
     """
     This function does nothing but displaying a fancy progress bar :)
@@ -57,8 +76,8 @@ def load_data(filename,interval=60,dropnan=True):
     return df
 
 # convert timestamp 
-def convert_timestamp(df):
-    df['ut_ms'] = pd.to_datetime(df['ut_ms'], unit='ms')
+def convert_timestamp(df,index='ut_ms'):
+    df[index] = pd.to_datetime(df[index], unit='ms')
     return df
 
 # resample data to arbitrary interval in minutes
@@ -73,21 +92,57 @@ def marsexpress_error(predictions,targets):
     error = np.mean(diff.values) ** 0.5
     return error
 
-# from http://vjethava.blogspot.de/2010/11/matlabs-keyboard-command-in-python.html
-import code
-import sys
-def keyboard(banner=None):
-    ''' Function that mimics the matlab keyboard command '''
-    # use exception trick to pick up the current frame
-    try:
-        raise None
-    except:
-        frame = sys.exc_info()[2].tb_frame.f_back
-    print "# Use quit() to exit :) Happy debugging!"
-    # evaluate commands in current namespace
-    namespace = frame.f_globals.copy()
-    namespace.update(frame.f_locals)
-    try:
-        code.interact(banner=banner, local=namespace)
-    except SystemExit:
-        return 
+
+# prepares data by reformatting columns, resampling etc
+def prepare_data_ftl(data,index):
+    colList = ['flagcomms',"ACROSS_TRACK","D1PVMC","D2PLND","D3POCM","D4PNPO","D5PPHB",\
+    "D7PLTS","D8PLTP","D9PSPO","EARTH","INERTIAL","MAINTENANCE",\
+    "NADIR","RADIO_SCIENCE","SLEW","SPECULAR","SPOT","WARMUP","NADIR_LANDER",]
+        
+    df = pd.DataFrame(index=index)
+    
+    for col in colList:
+        df[col] = 0
+    
+    # format times in data
+    data['utb_ms'] = pd.to_datetime(data['utb_ms'], unit='ms')
+    data['ute_ms'] = pd.to_datetime(data['ute_ms'], unit='ms')
+    for i in range(len(data)):
+        if ((i+1) % 100) == 0:
+            progress_printer(i,len(data))
+        #if i<10:
+        #    keyboard()
+        begin = df.index > data.utb_ms[i]
+        end = df.index < data.ute_ms[i]
+        thisindex = df.index.searchsorted(data.utb_ms[i])-1
+        
+        df[data.type[i]][thisindex] = 1
+        df[data.type[i]][begin * end] = 1
+
+        if data.flagcomms[i]:
+            df.flagcomms[thisindex] = 1
+        
+        if data.flagcomms[i]:
+            df.flagcomms[begin * end] = 1
+        """
+        print "---",i
+        print data.type[i]
+        print data.utb_ms[i]
+        print data.ute_ms[i]
+        print df.index[thisindex],df[data.type[i]][thisindex]
+        print df[data.type[i]][begin * end]
+        print "flagcomms:",data.flagcomms[i]
+        print df.index[thisindex],df.flagcomms[thisindex]
+        print df.flagcomms[begin * end]
+        """
+
+    return df
+
+def prepare_data_evtf(data):
+    umbras = pd.get_dummies(data.loc[data.description.str.contains("^MAR(.)*UMBRA", regex=True),:])
+    df = pd.DataFrame(index=data.index)
+    df = df.join(umbras).fillna(0)
+    return df
+
+
+
